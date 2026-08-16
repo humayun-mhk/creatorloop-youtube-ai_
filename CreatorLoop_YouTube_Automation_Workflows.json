@@ -1,0 +1,1816 @@
+{
+  "name": "CreatorLoop - Production Latest 50 Videos + 50 Filtered Comments v8.1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "creatorloop-youtube-reply-v2",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "608e1605-6295-49cc-83e1-794e1dcc8942",
+      "name": "FastAPI - Publish Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        6336,
+        -7552
+      ],
+      "webhookId": "creatorloop-youtube-reply-v2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "CreatorLoop Reply Publishing Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst youtubeCommentId = String(body.youtube_comment_id ?? '').trim();\nconst reply = String(body.reply ?? '').trim();\nif (!youtubeCommentId) throw new Error('youtube_comment_id is required');\nif (!reply) throw new Error('reply is required');\nif (reply.length > 2000) throw new Error('reply is too long');\nreturn [{ json: {\n  youtube_comment_id: youtubeCommentId,\n  reply,\n  idempotency_key: $json.headers?.['idempotency-key'] ?? youtubeCommentId\n} }];"
+      },
+      "id": "ab97fa2b-844e-47ec-a566-cd623aba1753",
+      "name": "Validate Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6592,
+        -7552
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "mine",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e333f7d5-5eaa-4ff4-8626-97862f170805",
+      "name": "YouTube - Publishing Account",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6848,
+        -7552
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/youtube/v3/comments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ snippet: { parentId: $('Validate Publishing Account1').first().json.youtube_comment_id, textOriginal: $('Validate Publishing Account1').first().json.reply } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e77cde3d-4fa1-496e-8778-8b497ddf7e8a",
+      "name": "YouTube - Publish Comment Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7360,
+        -7552
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const publisher = $json.items?.[0];\nif (!publisher?.id) throw new Error('The connected Google account does not have an authenticated YouTube channel');\nconst req = $('Validate Reply').first().json;\nreturn [{ json: {\n  ...req,\n  publisher_channel_id: publisher.id,\n  publisher_channel_title: publisher.snippet?.title ?? 'YouTube channel'\n} }];"
+      },
+      "id": "32f1ff76-ad74-436b-8581-747c5c075c49",
+      "name": "Validate Publishing Account1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7104,
+        -7552
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { youtube_reply_id: $json.id, status: 'published', publisher_channel_id: $('Validate Publishing Account1').first().json.publisher_channel_id, publisher_channel_title: $('Validate Publishing Account1').first().json.publisher_channel_title } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "df70124c-d73e-4c85-8743-ee168ae90b1d",
+      "name": "Return Published Reply1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        7616,
+        -7552
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "creatorloop-public-channel-sync-v2",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "009487f5-5f93-4b9e-9665-decdbecef1bf",
+      "name": "FastAPI - Channel Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        5248,
+        -9136
+      ],
+      "webhookId": "creatorloop-public-channel-sync-v2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\n\nconst allowed = ['connect', 'sync'];\nif (!allowed.includes(body.action)) {\n  throw new Error('action must be connect or sync');\n}\n\nif (!body.callback_base_url) {\n  throw new Error('callback_base_url is required');\n}\n\nconst callback = String(body.callback_base_url).trim().replace(/\\/+$/, '');\nif (!/^https?:\\/\\//i.test(callback)) {\n  throw new Error('callback_base_url must be an absolute http(s) URL');\n}\n\nif (body.action === 'connect' && !body.target_channel) {\n  throw new Error('target_channel is required for connect');\n}\n\nif (body.action === 'sync' && !body.channel_id) {\n  throw new Error('channel_id is required for sync');\n}\n\n// Keep only non-secret runtime context for the 15-minute monitor.\nconst state = $getWorkflowStaticData('global');\nstate.callback_base_url = callback;\nif (body.channel_id) state.channel_id = Number(body.channel_id);\nif (body.youtube_channel_id) {\n  state.youtube_channel_id = String(body.youtube_channel_id);\n}\n\nreturn [{\n  json: {\n    ...body,\n    callback_base_url: callback\n  }\n}];"
+      },
+      "id": "9fa328cf-f537-42d7-995d-1c6d15933cae",
+      "name": "Validate FastAPI Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5472,
+        -9136
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "connect",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "baff7828-397e-44c1-873a-da64589cccfa"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "connect"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "sync",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "7b455d11-b49b-4145-baf7-b2e382d843a7"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "sync"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "65575fc2-a91b-438d-9fa4-d1823ea601a3",
+      "name": "Route FastAPI Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        5696,
+        -9136
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = String($json.target_channel || '').trim();\nif (!raw) throw new Error('target_channel is empty');\nlet value = raw;\ntry {\n  const u = new URL(raw);\n  if (!u.hostname.toLowerCase().includes('youtube.com')) throw new Error('Only YouTube channel URLs are supported');\n  const parts = u.pathname.split('/').filter(Boolean);\n  if (parts[0] === 'channel' && parts[1]) value = parts[1];\n  else if (parts[0]?.startsWith('@')) value = parts[0];\n  else value = parts[0] || raw;\n} catch (e) {\n  if (/^https?:\\/\\//i.test(raw)) throw e;\n}\nvalue = String(value).trim();\nlet lookup_type = 'search';\nlet lookup_value = value;\nif (/^UC[0-9A-Za-z_-]{20,}$/.test(value)) lookup_type = 'id';\nelse if (value.startsWith('@')) { lookup_type = 'handle'; lookup_value = value; }\nelse if (/^[A-Za-z0-9._-]+$/.test(value)) { lookup_type = 'handle'; lookup_value = '@' + value.replace(/^@/, ''); }\nreturn [{ json: { ...$json, lookup_type, lookup_value } }];"
+      },
+      "id": "338c238f-bd34-4b4f-971f-09eef0edd301",
+      "name": "Normalize Channel Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        -9328
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "id",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8eac6a9c-a6e8-44ad-8b34-8abe8e2dc01a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "id"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "handle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "edd6960f-f19b-4dcf-9793-866b84d1f582"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "handle"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "01356dba-32e0-48a4-a077-a1c985151e65"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1c014e7e-8069-459a-a95a-5b7812a51d83",
+      "name": "Route Channel Lookup",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        6176,
+        -9328
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.lookup_value }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "5ece483c-aeac-401b-84f1-735c492192af",
+      "name": "YouTube - Channel By ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6432,
+        -9488
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "forHandle",
+              "value": "={{ $json.lookup_value }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "405fb844-715f-4731-8840-7dcc94dad6bb",
+      "name": "YouTube - Channel By Handle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6432,
+        -9328
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "type",
+              "value": "channel"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.lookup_value.replace(/^@/, '') }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ce6f7c99-6d12-45a7-8760-7724871f884b",
+      "name": "YouTube - Search Channel Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6432,
+        -9168
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.items?.[0]?.id?.channelId }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f1eb834e-13b7-49f0-bfac-071553e6fd3b",
+      "name": "YouTube - Resolve Search Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6688,
+        -9168
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json.items?.[0];\nif (!item?.id) throw new Error('Public YouTube channel not found');\n\nconst s = item.snippet ?? {};\nconst c = item.contentDetails ?? {};\nconst st = item.statistics ?? {};\nconst brand = item.brandingSettings?.channel ?? {};\nconst status = item.status ?? {};\nconst topics = item.topicDetails ?? {};\n\nconst thumbnail =\n  s.thumbnails?.high?.url ??\n  s.thumbnails?.medium?.url ??\n  s.thumbnails?.default?.url ??\n  null;\n\nconst state = $getWorkflowStaticData('global');\nstate.youtube_channel_id = item.id;\nstate.uploads_playlist_id = c.relatedPlaylists?.uploads ?? null;\n\nreturn [{\n  json: {\n    youtube_channel_id: item.id,\n    channel_title: s.title || 'YouTube Channel',\n    channel_url: `https://www.youtube.com/channel/${item.id}`,\n    custom_url: s.customUrl ?? null,\n    thumbnail_url: thumbnail,\n    description: s.description ?? '',\n    country: s.country ?? brand.country ?? null,\n    default_language: s.defaultLanguage ?? brand.defaultLanguage ?? null,\n    published_at: s.publishedAt ?? null,\n    uploads_playlist_id: c.relatedPlaylists?.uploads ?? null,\n    subscriber_count: Number(st.subscriberCount ?? 0),\n    hidden_subscriber_count: Boolean(st.hiddenSubscriberCount ?? false),\n    channel_view_count: Number(st.viewCount ?? 0),\n    public_video_count: Number(st.videoCount ?? 0),\n    keywords: brand.keywords ?? null,\n    topic_categories: topics.topicCategories ?? [],\n    privacy_status: status.privacyStatus ?? null,\n    made_for_kids: status.madeForKids ?? null\n  }\n}];"
+      },
+      "id": "89670b8c-73e0-4d48-a6b3-dd3aaaaf5a72",
+      "name": "Build Full Public Channel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6944,
+        -9328
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { channel: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7e72ac5f-990e-4831-b764-ec19a6601c82",
+      "name": "Return Channel To FastAPI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        7200,
+        -9328
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'syncing', channel_id: $json.channel_id } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "66ea72ee-a9c1-4b24-bd17-44e71abefdef",
+      "name": "Accept Full Sync",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        5952,
+        -8944
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Validate FastAPI Request').first().json;\nconst item = $json.items?.[0];\nif (!item?.id) throw new Error('YouTube channel no longer exists or is not public');\nconst uploads = item.contentDetails?.relatedPlaylists?.uploads;\nif (!uploads) throw new Error('Channel uploads playlist was not returned by YouTube');\nconst state = $getWorkflowStaticData('global');\nstate.callback_base_url = req.callback_base_url;\nstate.channel_id = Number(req.channel_id);\nstate.youtube_channel_id = item.id;\nstate.uploads_playlist_id = uploads;\nreturn [{ json: {\n  callback_base_url: req.callback_base_url,\n  channel_id: Number(req.channel_id),\n  youtube_channel_id: item.id,\n  uploads_playlist_id: uploads,\n  video_sync_mode: 'recent',\n  video_limit: 50\n} }];"
+      },
+      "id": "6f021775-04ac-48e4-9a13-a0745ce593e4",
+      "name": "Build Full Sync Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6432,
+        -8944
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "cd3ddd35-43c6-408c-9fb4-016e4bdbe92a",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        5248,
+        -8528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $getWorkflowStaticData('global');\nconst callback = String(state.callback_base_url || '').replace(/\\/$/, '');\nif (!callback) return [];\nreturn [{ json: { callback_base_url: callback } }];"
+      },
+      "id": "794c2b6e-fc96-4bb2-99df-60a430646569",
+      "name": "Load Monitor Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5472,
+        -8528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $getWorkflowStaticData('global');\nconst current = $json.channel;\nif (!$json.connected || !current?.id || !current?.youtube_channel_id) return [];\nconst uploads = current.uploads_playlist_id || state.uploads_playlist_id;\nif (!uploads) throw new Error('uploads_playlist_id is missing. Reconnect this channel once with the updated workflow.');\nreturn [{ json: {\n  callback_base_url: String(state.callback_base_url).replace(/\\/$/, ''),\n  channel_id: Number(current.id),\n  youtube_channel_id: current.youtube_channel_id,\n  uploads_playlist_id: uploads,\n  video_sync_mode: 'recent',\n  video_limit: 50\n} }];"
+      },
+      "id": "fef649eb-e6cd-43cd-b8eb-4b8f618407d9",
+      "name": "Build Monitor Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        -8528
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.video_sync_mode }}",
+                    "rightValue": "all",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8224cead-3f1b-49c4-ae79-1ca7b29a2524"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "all"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.video_sync_mode }}",
+                    "rightValue": "recent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "80573b9d-7f9a-4ede-a130-d19411a2da55"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "recent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5bed672c-23c8-4f80-bd78-1e8d93410737",
+      "name": "Route Video Sync Mode",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        6720,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/playlistItems",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "contentDetails"
+            },
+            {
+              "name": "playlistId",
+              "value": "={{ $json.uploads_playlist_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "bf0e4d09-b8f8-4cb6-a02d-d67dce7a77fd",
+      "name": "YouTube - Legacy Uploads (Disabled Full Crawl)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6976,
+        -8896
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\n\nconst ctx = getContext();\nconst ids = [];\n\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n\n  for (const row of body.items ?? []) {\n    const id = row.contentDetails?.videoId;\n\n    if (id && !ids.includes(id)) {\n      ids.push(id);\n    }\n\n    if (ids.length >= 50) break;\n  }\n\n  if (ids.length >= 50) break;\n}\n\nconst latestIds = ids.slice(0, 50);\n\nif (!latestIds.length) {\n  return [{\n    json: {\n      ...ctx,\n      __no_videos: true\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...ctx,\n    __no_videos: false,\n    video_ids: latestIds,\n    videos_checked_total: latestIds.length\n  }\n}];"
+      },
+      "id": "e117fa69-58de-4a0b-975c-2573f437d933",
+      "name": "Batch Video IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7232,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.__no_videos !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "45fcb7ad-cfaf-4cd3-be0f-fddc468e8b5e",
+      "name": "Has Video Batch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        7456,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\nconst ctx = getContext();\nconst videos = [];\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  for (const v of body.items ?? []) {\n    videos.push({\n      found: true,\n      video_id: v.id,\n      title: v.snippet?.title || 'Untitled',\n      youtube_url: `https://www.youtube.com/watch?v=${v.id}`,\n      thumbnail_url: v.snippet?.thumbnails?.high?.url ?? v.snippet?.thumbnails?.medium?.url ?? v.snippet?.thumbnails?.default?.url ?? null,\n      description: v.snippet?.description ?? '',\n      tags: v.snippet?.tags ?? [],\n      channel_id: v.snippet?.channelId,\n      channel_title: v.snippet?.channelTitle ?? 'Unknown',\n      category_id: v.snippet?.categoryId ?? null,\n      default_language: v.snippet?.defaultLanguage ?? null,\n      default_audio_language: v.snippet?.defaultAudioLanguage ?? null,\n      live_broadcast_content: v.snippet?.liveBroadcastContent ?? null,\n      published_at: v.snippet?.publishedAt ?? null,\n      duration: v.contentDetails?.duration ?? null,\n      definition: v.contentDetails?.definition ?? null,\n      caption_available: v.contentDetails?.caption === 'true',\n      view_count: Number(v.statistics?.viewCount ?? 0),\n      like_count: Number(v.statistics?.likeCount ?? 0),\n      comment_count: Number(v.statistics?.commentCount ?? 0)\n    });\n  }\n}\nconst output = [];\nfor (let i = 0; i < videos.length; i += 50) {\n  output.push({ json: { ...ctx, videos: videos.slice(i, i + 50) } });\n}\nreturn output.length ? output : [{ json: { ...ctx, __no_videos: true } }];"
+      },
+      "id": "905563d4-6143-4b1a-adff-8c40896c02e2",
+      "name": "Normalize Video Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7936,
+        -8880
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\nreturn [{ json: getContext() }];"
+      },
+      "id": "c728cd88-9c2a-4b51-9c7a-133c8767e0e2",
+      "name": "Prepare Comment Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8448,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_base_url + '/api/channels/' + $json.channel_id + '/internal/progress' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ status: 'fetching_comments', comment_sync_status: 'syncing' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "5df89463-0c25-4195-861f-f7380aa85624",
+      "name": "FastAPI - Mark Fetching Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8704,
+        -8784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/commentThreads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,replies"
+            },
+            {
+              "name": "allThreadsRelatedToChannelId",
+              "value": "={{ $('Prepare Comment Poll').first().json.youtube_channel_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            },
+            {
+              "name": "order",
+              "value": "time"
+            },
+            {
+              "name": "textFormat",
+              "value": "plainText"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "b635d866-c3c2-4b0a-bd85-c73945b39993",
+      "name": "YouTube - New Channel Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8960,
+        -8784
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Comment Poll').first().json;\n\nlet latestVideoIds = [];\n\ntry {\n  latestVideoIds = $('Batch Video IDs').first().json.video_ids ?? [];\n} catch {}\n\nconst latestVideoSet = new Set(\n  latestVideoIds.map((id) => String(id))\n);\n\nconst output = [];\nlet fetched = 0;\nlet skippedOutsideLatestVideos = 0;\n\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n\n  for (const thread of body.items ?? []) {\n    const top = thread.snippet?.topLevelComment;\n    const s = top?.snippet;\n\n    if (\n      !top?.id ||\n      !s?.videoId ||\n      (!s?.textOriginal && !s?.textDisplay)\n    ) {\n      continue;\n    }\n\n    fetched += 1;\n\n    // IMPORTANT:\n    // CreatorLoop v8 only processes comments that belong to the\n    // latest 50 videos collected by Batch Video IDs in this sync.\n    if (!latestVideoSet.has(String(s.videoId))) {\n      skippedOutsideLatestVideos += 1;\n      continue;\n    }\n\n    output.push({\n      json: {\n        event_type: 'youtube.comment.received',\n        source: 'youtube',\n        monitored_channel_id: ctx.youtube_channel_id,\n\n        comment: {\n          youtube_comment_id: top.id,\n          youtube_thread_id: thread.id,\n          video_id: s.videoId,\n          author_name: s.authorDisplayName || 'YouTube viewer',\n          author_channel_id: s.authorChannelId?.value ?? null,\n          author_profile_image_url:\n            s.authorProfileImageUrl ?? null,\n          author_channel_url: s.authorChannelUrl ?? null,\n          text: s.textOriginal ?? s.textDisplay ?? '',\n          like_count: Number(s.likeCount ?? 0),\n          reply_count: Number(\n            thread.snippet?.totalReplyCount ?? 0\n          ),\n          can_reply: thread.snippet?.canReply !== false,\n          is_public: thread.snippet?.isPublic !== false,\n          published_at: s.publishedAt,\n          updated_at: s.updatedAt ?? s.publishedAt\n        },\n\n        // The video is guaranteed to be one of the latest-50 IDs.\n        // FastAPI already stored/upserted those videos earlier\n        // in the same sync.\n        video: {\n          found: false,\n          video_id: s.videoId\n        },\n\n        ingestion: {\n          fetched_at: new Date().toISOString(),\n          pipeline:\n            'creatorloop-n8n-youtube-monitor-v8'\n        }\n      }\n    });\n  }\n}\n\nif (!output.length) {\n  return [{\n    json: {\n      ...ctx,\n      __no_comments: true,\n      comments_fetched: fetched,\n      comments_eligible: 0,\n      comments_skipped_outside_latest_videos:\n        skippedOutsideLatestVideos\n    }\n  }];\n}\n\nreturn output;"
+      },
+      "id": "76bef06c-d0f3-42b2-9fe3-a0f286b18db7",
+      "name": "Normalize New Comments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9216,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.__no_comments !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e652cc53-fbcf-4760-baf3-014516659e59",
+      "name": "Has New/Public Comment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        9472,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Comment Poll').first().json.callback_base_url + '/api/youtube/comments/ingest' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "79f897e1-0d36-4f7c-8148-d3808154fe48",
+      "name": "FastAPI - Ingest Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        9728,
+        -8880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g3IzPKGjdy1rEuY9",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Comment Poll').first().json;\nlet delivered = 0;\nlet suggested = 0;\nlet unmet = 0;\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  if (body.__no_comments) continue;\n  delivered += 1;\n  if (body.outcome === 'reply_suggested') suggested += 1;\n  if (body.outcome === 'unmet_demand') unmet += 1;\n}\nreturn [{ json: { ...ctx, comments_delivered: delivered, replies_suggested: suggested, unmet_demand: unmet } }];"
+      },
+      "id": "c9501272-0874-42d8-9bcd-43d115922a5c",
+      "name": "Finalize Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10240,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.youtube_channel_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "79aea2a0-05fe-4e71-8519-ee68e5461a52",
+      "name": "YouTube - Sync Channel Details1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6688,
+        -8944
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.callback_base_url + '/api/channels/current' }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "db8b9832-fb3f-4ed9-88d6-068d46484b1d",
+      "name": "FastAPI - Current Channel1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5696,
+        -8528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/playlistItems",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "contentDetails"
+            },
+            {
+              "name": "playlistId",
+              "value": "={{ $json.uploads_playlist_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "22bc5700-632c-4fa0-a97d-d947e8be1be2",
+      "name": "YouTube - Recent Uploads1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6976,
+        -8688
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.video_ids.join(',') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "4b7f2226-f992-48ea-9388-a286d10ab35f",
+      "name": "YouTube - Video Metadata1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7696,
+        -8880
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_base_url + '/api/channels/' + $json.channel_id + '/internal/videos' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ videos: $json.videos, index_videos: true }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "80a36f5a-7a5a-43ed-9d82-dfc1c6a7515a",
+      "name": "FastAPI - Store & Index Videos1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8192,
+        -8880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Finalize Poll').first().json.callback_base_url + '/api/channels/' + $('Finalize Poll').first().json.channel_id + '/internal/progress' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ status: 'ready', video_sync_status: 'ready', comment_sync_status: 'ready', index_status: 'ready' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "3e9f1e10-9570-44e0-af81-121b8fe82b3c",
+      "name": "FastAPI - Mark Channel Ready1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        11008,
+        -8784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Validate FastAPI Request').first().json.callback_base_url + '/api/channels/current' }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e81a8c54-ec68-4e99-9f68-ef96342a3bb8",
+      "name": "FastAPI - Resolve Current Channel For Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6176,
+        -8944
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Validate FastAPI Request').first().json;\nconst current = $json.channel;\n\nif (!$json.connected || !current?.id || !current?.youtube_channel_id) {\n  throw new Error('FastAPI has no connected YouTube channel');\n}\n\nif (Number(current.id) !== Number(req.channel_id)) {\n  throw new Error(\n    `Requested channel_id ${req.channel_id} does not match current channel ${current.id}`\n  );\n}\n\nreturn [{\n  json: {\n    callback_base_url: req.callback_base_url,\n    channel_id: Number(current.id),\n    youtube_channel_id: current.youtube_channel_id\n  }\n}];"
+      },
+      "id": "6125fd48-8a5c-4a0c-b9db-4c47e982b660",
+      "name": "Build Sync Target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6432,
+        -8944
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Comment Poll').first().json.callback_base_url + '/api/comments/' + $json.comment_id + '/process' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "6352927a-f93b-4128-ab48-f8320efe04a6",
+      "name": "FastAPI - Process Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        9984,
+        -8880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g3IzPKGjdy1rEuY9",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ Number($json.unmet_demand ?? 0) > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dbe79b59-3d07-47e8-8c4b-29b004bebe6b",
+      "name": "Should Rebuild Opportunities?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        10496,
+        -8784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Finalize Poll').first().json.callback_base_url + '/api/opportunities/rebuild' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 600000
+        }
+      },
+      "id": "76e5d5bd-513e-4d24-9a59-e3bee3ab578a",
+      "name": "FastAPI - Rebuild Opportunities Once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10752,
+        -8880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# CreatorLoop — YouTube Sync & Audience Intelligence\n\n\n## This n8n workflow connects a public YouTube channel, syncs the latest videos, monitors recent comments every 15 minutes, and sends them to FastAPI for AI analysis.\n\n## It handles video metadata, secure comment ingestion, semantic-search processing, reply recommendations, and unmet-demand detection for future content opportunities.\n\n## **Flow:** YouTube → n8n → FastAPI + Gemini → PostgreSQL/pgvector → Replies & Content Opportunities",
+        "height": 1600,
+        "width": 6720
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4768,
+        -9856
+      ],
+      "typeVersion": 1,
+      "id": "3be50809-63ca-45eb-9899-99c3a9652f77",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# CreatorLoop — Approved Reply Publishing\n\n## This workflow securely publishes **creator-approved AI replies** to YouTube.\n\n## It receives the approved reply from FastAPI, validates the comment ID and reply text, verifies the authenticated YouTube publishing account, posts the reply through the **YouTube Data API**, and returns the published reply ID back to CreatorLoop.\n\n# FastAPI → n8n → YouTube OAuth → Publish Reply → Return Status",
+        "height": 416,
+        "width": 2320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        5600,
+        -7760
+      ],
+      "typeVersion": 1,
+      "id": "9f804623-30fe-47c5-94f9-c649318a56a5",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "FastAPI - Publish Reply Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reply": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Publishing Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Publishing Account": {
+      "main": [
+        [
+          {
+            "node": "Validate Publishing Account1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Publish Comment Reply": {
+      "main": [
+        [
+          {
+            "node": "Return Published Reply1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Publishing Account1": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Publish Comment Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Channel Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate FastAPI Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate FastAPI Request": {
+      "main": [
+        [
+          {
+            "node": "Route FastAPI Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route FastAPI Action": {
+      "main": [
+        [
+          {
+            "node": "Normalize Channel Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Accept Full Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Channel Input": {
+      "main": [
+        [
+          {
+            "node": "Route Channel Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Channel Lookup": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Channel By ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Channel By Handle",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Search Channel Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Channel By ID": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Channel By Handle": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Search Channel Fallback": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Resolve Search Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Resolve Search Result": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Full Public Channel": {
+      "main": [
+        [
+          {
+            "node": "Return Channel To FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept Full Sync": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Resolve Current Channel For Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Full Sync Context": {
+      "main": [
+        [
+          {
+            "node": "Route Video Sync Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Monitor Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Monitor Context": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Current Channel1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Monitor Context": {
+      "main": [
+        [
+          {
+            "node": "Route Video Sync Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Video Sync Mode": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Legacy Uploads (Disabled Full Crawl)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Recent Uploads1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Video IDs": {
+      "main": [
+        [
+          {
+            "node": "Has Video Batch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Video Batch?": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Video Metadata1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Comment Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Video Batches": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Store & Index Videos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Comment Poll": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Mark Fetching Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Mark Fetching Comments": {
+      "main": [
+        [
+          {
+            "node": "YouTube - New Channel Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - New Channel Comments": {
+      "main": [
+        [
+          {
+            "node": "Normalize New Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize New Comments": {
+      "main": [
+        [
+          {
+            "node": "Has New/Public Comment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New/Public Comment?": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Ingest Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Poll": {
+      "main": [
+        [
+          {
+            "node": "Should Rebuild Opportunities?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Sync Channel Details1": {
+      "main": [
+        [
+          {
+            "node": "Build Full Sync Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Current Channel1": {
+      "main": [
+        [
+          {
+            "node": "Build Monitor Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Recent Uploads1": {
+      "main": [
+        [
+          {
+            "node": "Batch Video IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Video Metadata1": {
+      "main": [
+        [
+          {
+            "node": "Normalize Video Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Store & Index Videos1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Comment Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Resolve Current Channel For Sync": {
+      "main": [
+        [
+          {
+            "node": "Build Sync Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Sync Target": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Sync Channel Details1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Ingest Comment": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Process Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Process Comment": {
+      "main": [
+        [
+          {
+            "node": "Finalize Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Rebuild Opportunities?": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Rebuild Opportunities Once",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FastAPI - Mark Channel Ready1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Rebuild Opportunities Once": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Mark Channel Ready1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "7efad530-8dd4-43d3-85d2-08e2da1270d5",
+  "meta": {
+    "instanceId": "9a029f25d0adcf209e1cf2be53efd81c3a9e6296c5195c66488a6f4353b5aa56"
+  },
+  "nodeGroups": [],
+  "id": "Enxd1bgwiKgU1kHk",
+  "tags": []
+}

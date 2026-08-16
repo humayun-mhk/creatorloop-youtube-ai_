@@ -33,7 +33,7 @@ class CommentProcessingService:
         self,
         comment_id: int,
         *,
-        rebuild_opportunities: bool = True,
+        rebuild_opportunities: bool = False,
     ) -> ProcessingOutcome:
         with self.session.begin():
             comment = self.session.execute(

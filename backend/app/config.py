@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    gemini_max_retries: int = Field(default=2, ge=0, le=8)
+    gemini_retry_max_delay_seconds: float = Field(default=120.0, gt=0, le=300)
 
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = Field(default=768, ge=128, le=3072)

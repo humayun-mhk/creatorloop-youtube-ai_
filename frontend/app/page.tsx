@@ -15,7 +15,7 @@ import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 
 const VIDEO_SYNC_WINDOW = 50;
-const COMMENT_SYNC_WINDOW = 50;
+const COMMENT_SYNC_WINDOW = 20;
 
 const emptyMetrics: DashboardMetrics = {
   comments_processed: 0,
@@ -347,7 +347,7 @@ export default function OverviewPage() {
               status={sync.comment_sync_status}
               value={`latest ${COMMENT_SYNC_WINDOW} checked · ${formatNumber(
                 sync.comments_imported,
-              )} imported`}
+              )} total stored`}
             />
           </div>
         </section>

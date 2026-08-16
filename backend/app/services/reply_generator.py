@@ -140,7 +140,6 @@ Similarity: {context.similarity:.4f}
         request = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0.4,
                 "responseMimeType": "application/json",
                 "responseJsonSchema": (
                     GeneratedReply.model_json_schema()

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     internal_api_key: SecretStr = Field(min_length=16)
 
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash-lite"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     gemini_max_retries: int = Field(default=2, ge=0, le=8)
     gemini_retry_max_delay_seconds: float = Field(default=120.0, gt=0, le=300)

@@ -60,7 +60,6 @@ Actual audience comments:
         request = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0.4,
                 "responseMimeType": "application/json",
                 "responseJsonSchema": (
                     GeneratedBrief.model_json_schema()

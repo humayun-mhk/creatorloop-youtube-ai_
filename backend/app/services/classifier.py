@@ -64,7 +64,6 @@ Viewer comment: {comment_text}
         request = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0,
                 "responseMimeType": "application/json",
                 "responseJsonSchema": (
                     ClassificationResult.model_json_schema()

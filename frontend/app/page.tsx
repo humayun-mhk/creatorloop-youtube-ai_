@@ -125,6 +125,16 @@ export default function OverviewPage() {
   const c = channel.channel;
   const sync = channel.sync;
 
+  const syncBusy =
+    syncing ||
+    sync?.status === "connecting" ||
+    sync?.status === "syncing" ||
+    sync?.status === "fetching_videos" ||
+    sync?.status === "saving_videos" ||
+    sync?.status === "indexing_videos" ||
+    sync?.status === "fetching_comments" ||
+    sync?.status === "processing_comments";
+
   return (
     <div className="stack-lg">
       {error && <div className="banner error">{error}</div>}
@@ -139,8 +149,14 @@ export default function OverviewPage() {
           </div>
         </div>
         <div className="hero-actions">
-          <button className="button secondary" onClick={syncNow} disabled={syncing || (sync?.status !== "ready" && sync?.status !== "failed")}>
-            {syncing ? "Starting…" : "Sync now"}
+          
+  <button
+            type="button"
+            className="button secondary"
+            onClick={syncNow}
+            disabled={syncBusy}
+          >
+            {syncBusy ? "Syncing…" : "Sync now"}
           </button>
           <a className="button ghost" href={c.channel_url ?? `https://youtube.com/channel/${c.youtube_channel_id}`} target="_blank" rel="noreferrer">Open YouTube ↗</a>
         </div>

@@ -1,4 +1,3 @@
-# CREATORLOOP_GEMINI_QUOTA_FIX_V2
 import logging
 import math
 import random

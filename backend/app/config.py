@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     n8n_channel_sync_webhook_secret_header: str = "X-Internal-API-Key"
     n8n_channel_sync_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
-    # n8n checks the newest 100 videos each run. The backend/database decides
+    # n8n checks the newest 50 videos each run. The backend/database decides
     # whether each video is new, changed, already indexed, or metadata-only.
-    initial_sync_video_limit: int = Field(default=100, ge=1, le=500)
+    initial_sync_video_limit: int = Field(default=50, ge=1, le=500)
 
     n8n_quick_analyze_webhook_url: str | None = None
     n8n_comment_monitor_secret: SecretStr | None = None

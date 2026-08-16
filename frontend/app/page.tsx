@@ -14,7 +14,7 @@ import type {
 import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 
-const VIDEO_SYNC_WINDOW = 100;
+const VIDEO_SYNC_WINDOW = 50;
 const COMMENT_SYNC_WINDOW = 50;
 
 const emptyMetrics: DashboardMetrics = {

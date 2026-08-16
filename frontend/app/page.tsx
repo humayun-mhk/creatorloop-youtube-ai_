@@ -15,7 +15,7 @@ import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 
 const VIDEO_SYNC_WINDOW = 50;
-const COMMENT_SYNC_WINDOW = 20;
+const COMMENT_SYNC_WINDOW = 50;
 
 const emptyMetrics: DashboardMetrics = {
   comments_processed: 0,
@@ -169,8 +169,8 @@ export default function OverviewPage() {
           <p>
             Connect any public YouTube channel. CreatorLoop checks the latest{" "}
             {VIDEO_SYNC_WINDOW} videos, incrementally indexes only new or
-            changed content, and analyzes up to the latest{" "}
-            {COMMENT_SYNC_WINDOW} comments per sync.
+            changed content, and checks up to the latest{" "}
+            {COMMENT_SYNC_WINDOW} channel comments per sync. Only comments attached to the latest {VIDEO_SYNC_WINDOW} videos are processed.
           </p>
 
           <div className="flow-strip">
@@ -209,7 +209,7 @@ export default function OverviewPage() {
 
           <small>
             Public analysis checks at most {VIDEO_SYNC_WINDOW} recent videos
-            and {COMMENT_SYNC_WINDOW} recent comments per sync.
+            and {COMMENT_SYNC_WINDOW} recent comments per sync. Comments on older videos are skipped.
           </small>
         </form>
       </section>
@@ -345,7 +345,7 @@ export default function OverviewPage() {
             <PipelineStep
               title="Comments"
               status={sync.comment_sync_status}
-              value={`latest ${COMMENT_SYNC_WINDOW} checked · ${formatNumber(
+              value={`up to ${COMMENT_SYNC_WINDOW} checked · latest-${VIDEO_SYNC_WINDOW}-video comments only · ${formatNumber(
                 sync.comments_imported,
               )} total stored`}
             />
@@ -488,9 +488,10 @@ export default function OverviewPage() {
           <div className="callout">
             <span>Incremental sync</span>
             <p>
-              n8n checks the latest {VIDEO_SYNC_WINDOW} videos and latest{" "}
-              {COMMENT_SYNC_WINDOW} comments. FastAPI reuses already indexed
-              videos and only embeds new, changed, or missing-index content.
+              n8n checks the latest {VIDEO_SYNC_WINDOW} videos and up to{" "}
+              {COMMENT_SYNC_WINDOW} newest channel comments. Comments attached
+              to older videos are skipped. FastAPI reuses already indexed videos
+              and only embeds new, changed, or missing-index content.
             </p>
           </div>
         </div>

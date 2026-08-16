@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, func, select
@@ -13,6 +14,8 @@ from app.schemas.channel import (
 )
 from app.services.embeddings import EmbeddingProviderError
 from app.services.video_indexing import VideoIndexingService
+
+logger = logging.getLogger(__name__)
 
 
 class ChannelNotFoundError(LookupError):
@@ -46,9 +49,7 @@ class ChannelsService:
         update_values["updated_at"] = func.now()
 
         try:
-            # SQLAlchemy 2.x automatically begins a transaction on the first
-            # SELECT/statement. Do not open another `with session.begin()` here;
-            # just use the current transaction and commit it explicitly.
+            # CreatorLoop is a single analyzed-channel workspace.
             self.session.execute(
                 delete(Channel).where(
                     Channel.youtube_channel_id != identity.youtube_channel_id
@@ -78,15 +79,11 @@ class ChannelsService:
 
     def start_sync(self, channel_id: int) -> Channel:
         try:
-            # current()/get() may already have triggered SQLAlchemy autobegin.
-            # Reusing that transaction avoids:
-            #   InvalidRequestError: A transaction is already begun on this Session.
             channel = self._locked(channel_id)
             channel.sync_status = "syncing"
             channel.video_sync_status = "pending"
             channel.comment_sync_status = "pending"
             channel.index_status = "pending"
-
             self.session.commit()
             return channel
         except Exception:
@@ -127,10 +124,8 @@ class ChannelsService:
 
             if progress.video_sync_status == "ready":
                 channel.last_video_sync_at = now
-
             if progress.comment_sync_status == "ready":
                 channel.last_comment_sync_at = now
-
             if progress.status == "ready":
                 channel.last_full_sync_at = now
 
@@ -145,8 +140,25 @@ class ChannelsService:
         channel_id: int,
         request: VideoBatchImportRequest,
     ) -> tuple[list[int], int, int]:
+        """
+        Upsert metadata for the videos n8n checked and index only videos that
+        actually need an embedding refresh.
+
+        A video is indexed when:
+        - it is new to CreatorLoop, or
+        - its title/description changed, or
+        - it exists but has no vector chunks yet.
+
+        View/like/comment-count changes update PostgreSQL metadata without
+        regenerating embeddings.
+        """
         video_ids: list[int] = []
         index_ids: list[int] = []
+        seen_youtube_ids: set[str] = set()
+
+        new_count = 0
+        changed_count = 0
+        already_indexed_count = 0
 
         try:
             channel = self._locked(channel_id)
@@ -154,6 +166,12 @@ class ChannelsService:
             channel.video_sync_status = "syncing"
 
             for payload in request.videos:
+                # Defensive dedupe in case an upstream batch contains the same ID
+                # more than once.
+                if payload.video_id in seen_youtube_ids:
+                    continue
+                seen_youtube_ids.add(payload.video_id)
+
                 if payload.channel_id != channel.youtube_channel_id:
                     raise ChannelMismatchError(
                         "Video channel_id does not match the connected channel"
@@ -176,6 +194,14 @@ class ChannelsService:
                         or 0
                     )
 
+                is_new = existing is None
+                content_changed = (
+                    is_new
+                    or existing.title != payload.title
+                    or existing.description != payload.description
+                )
+                missing_index = existing is not None and existing_chunk_count == 0
+
                 values = payload.model_dump(exclude={"found", "video_id"})
                 values.update(
                     youtube_video_id=payload.video_id,
@@ -186,6 +212,8 @@ class ChannelsService:
                     ),
                 )
 
+                # Always refresh cheap metadata/statistics for videos in the
+                # latest-100 window, even when their embeddings are reused.
                 update_values = {
                     key: value
                     for key, value in values.items()
@@ -205,16 +233,19 @@ class ChannelsService:
 
                 video_ids.append(video_id)
 
-                content_changed = (
-                    existing is None
-                    or existing.title != payload.title
-                    or existing.description != payload.description
+                should_index = request.index_videos and (
+                    is_new or content_changed or missing_index
                 )
 
-                if request.index_videos and (
-                    content_changed or existing_chunk_count == 0
-                ):
+                if should_index and video_id not in index_ids:
                     index_ids.append(video_id)
+
+                if is_new:
+                    new_count += 1
+                elif content_changed or missing_index:
+                    changed_count += 1
+                else:
+                    already_indexed_count += 1
 
             channel.videos_discovered = (
                 self.session.scalar(
@@ -231,6 +262,16 @@ class ChannelsService:
             self.session.rollback()
             raise
 
+        logger.info(
+            "Video sync batch checked=%s new=%s changed_or_missing_index=%s "
+            "already_indexed=%s to_index=%s",
+            len(video_ids),
+            new_count,
+            changed_count,
+            already_indexed_count,
+            len(index_ids),
+        )
+
         if index_ids:
             self.apply_progress(
                 channel_id,
@@ -245,17 +286,23 @@ class ChannelsService:
             try:
                 for video_id in index_ids:
                     indexer.index(video_id)
-            except EmbeddingProviderError:
-                # Ensure any transaction left open by the failed index operation
-                # is cleared before recording the failed progress state.
+            except Exception:
+                # Clear any transaction left open by the failed indexing call
+                # before recording the failure status.
                 self.session.rollback()
-                self.apply_progress(
-                    channel_id,
-                    ChannelSyncProgress(
-                        status="failed",
-                        index_status="failed",
-                    ),
-                )
+                try:
+                    self.apply_progress(
+                        channel_id,
+                        ChannelSyncProgress(
+                            status="failed",
+                            index_status="failed",
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Unable to mark channel index as failed",
+                        extra={"channel_id": channel_id},
+                    )
                 raise
 
         try:

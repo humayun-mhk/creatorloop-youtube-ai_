@@ -16,8 +16,6 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash-lite"
     gemini_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
-    # Gemini Embedding 2 supports 128-3072 dimensions. Keep 768 because the
-    # existing pgvector schema/index in CreatorLoop is built around 768 dims.
     embedding_model: str = "gemini-embedding-2"
     embedding_dimension: int = Field(default=768, ge=128, le=3072)
     embedding_timeout_seconds: float = Field(default=45.0, gt=0, le=120)
@@ -57,9 +55,9 @@ class Settings(BaseSettings):
     n8n_channel_sync_webhook_secret_header: str = "X-Internal-API-Key"
     n8n_channel_sync_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
-    # CreatorLoop now intentionally indexes only the latest 20 videos during
-    # the initial/manual channel sync.
-    initial_sync_video_limit: int = Field(default=20, ge=1, le=500)
+    # n8n checks the newest 100 videos each run. The backend/database decides
+    # whether each video is new, changed, already indexed, or metadata-only.
+    initial_sync_video_limit: int = Field(default=100, ge=1, le=500)
 
     n8n_quick_analyze_webhook_url: str | None = None
     n8n_comment_monitor_secret: SecretStr | None = None

@@ -1,35 +1,129 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Comment, Reply } from "@/lib/types";
-import { formatDate, percent, titleCase } from "@/lib/format";
+import {
+  formatDate,
+  percent,
+  titleCase,
+} from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 
-export default function ReplyCard({ reply, comment, onChange }: { reply: Reply; comment?: Comment; onChange?: (reply: Reply) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(reply.edited_reply ?? reply.suggested_reply);
-  const [busy, setBusy] = useState<"publish" | "ignore" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+type BusyAction = "publish" | "ignore" | null;
 
-  const act = async (kind: "publish" | "ignore") => {
-    setBusy(kind);
+export default function ReplyCard({
+  reply,
+  comment,
+  onChange,
+}: {
+  reply: Reply;
+  comment?: Comment;
+  onChange?: (reply: Reply) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(
+    reply.edited_reply ?? reply.suggested_reply,
+  );
+  const [busy, setBusy] =
+    useState<BusyAction>(null);
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const savedReplyText =
+    reply.edited_reply ?? reply.suggested_reply;
+
+  useEffect(() => {
+    setText(savedReplyText);
+  }, [reply.id, savedReplyText]);
+
+  const isPending =
+    reply.status === "pending_approval";
+  const isFailed = reply.status === "failed";
+  const isPublished =
+    reply.status === "published";
+  const actionable = isPending || isFailed;
+
+  const trimmedText = text.trim();
+  const hasChanged =
+    trimmedText !== savedReplyText.trim();
+
+  const primaryLabel = useMemo(() => {
+    if (busy === "publish") {
+      return isFailed ? "Retrying…" : "Publishing…";
+    }
+
+    if (editing) {
+      return isFailed
+        ? "Save & retry"
+        : "Save & publish";
+    }
+
+    return isFailed
+      ? "Retry publish"
+      : "Approve & publish";
+  }, [busy, editing, isFailed]);
+
+  async function publish() {
+    if (!trimmedText) return;
+
+    setBusy("publish");
     setError(null);
+
     try {
-      const updated = await api<Reply>(`replies/${reply.id}/${kind === "publish" ? "approve" : "ignore"}`, {
-        method: "POST",
-        body: kind === "publish" ? JSON.stringify({ reply: text.trim() || null }) : undefined,
-      });
+      const updated = await api<Reply>(
+        `replies/${reply.id}/approve`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            reply: trimmedText,
+          }),
+        },
+      );
+
       onChange?.(updated);
-      if (kind === "publish") setEditing(false);
+      setEditing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Publishing failed",
+      );
     } finally {
       setBusy(null);
     }
-  };
+  }
 
-  const actionable = reply.status === "pending_approval" || reply.status === "failed";
+  async function ignore() {
+    setBusy("ignore");
+    setError(null);
+
+    try {
+      const updated = await api<Reply>(
+        `replies/${reply.id}/ignore`,
+        {
+          method: "POST",
+        },
+      );
+
+      onChange?.(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to ignore reply",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function cancelEdit() {
+    setText(savedReplyText);
+    setEditing(false);
+    setError(null);
+  }
 
   return (
     <article className="reply-card">
@@ -37,10 +131,17 @@ export default function ReplyCard({ reply, comment, onChange }: { reply: Reply; 
         <div>
           <div className="meta-row">
             <StatusBadge value={reply.status} />
-            <span>{percent(reply.similarity)} match</span>
+            <span>
+              {percent(reply.similarity)} match
+            </span>
             <span>{formatDate(reply.created_at)}</span>
           </div>
-          <h3>{comment ? `Reply to ${comment.author_name}` : `Reply #${reply.id}`}</h3>
+
+          <h3>
+            {comment
+              ? `Reply to ${comment.author_name}`
+              : `Reply #${reply.id}`}
+          </h3>
         </div>
       </div>
 
@@ -48,36 +149,107 @@ export default function ReplyCard({ reply, comment, onChange }: { reply: Reply; 
         <div className="comment-context">
           <span>Viewer comment</span>
           <p>{comment.text}</p>
-          <small>{comment.video.title}</small>
+
+          <small>
+            {comment.video?.title ??
+              "Source video unavailable"}
+          </small>
         </div>
       )}
 
       <div className="reply-editor">
-        <label>AI suggested reply</label>
+        <label>
+          {reply.edited_reply
+            ? "Final reply text"
+            : "AI suggested reply"}
+        </label>
+
         {editing ? (
-          <textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={2000} rows={5} />
+          <>
+            <textarea
+              value={text}
+              onChange={(event) =>
+                setText(event.target.value)
+              }
+              maxLength={2000}
+              rows={5}
+              autoFocus
+            />
+
+            <small>
+              {text.length}/2000 characters
+              {hasChanged ? " · Edited" : ""}
+            </small>
+          </>
         ) : (
-          <p>{reply.edited_reply ?? reply.suggested_reply}</p>
+          <p>{savedReplyText}</p>
         )}
-        {editing && <small>{text.length}/2000 characters</small>}
       </div>
 
-      {error && <div className="inline-error">{error}</div>}
+      {isFailed && !error && (
+        <div className="inline-error">
+          Publishing failed previously. You can retry the
+          same reply, edit it first, or ignore it.
+        </div>
+      )}
+
+      {error && (
+        <div className="inline-error">{error}</div>
+      )}
 
       {actionable ? (
         <div className="button-row">
-          <button className="button primary" disabled={busy !== null || !text.trim()} onClick={() => act("publish")}>
-            {busy === "publish" ? "Publishing…" : "Approve & publish"}
+          <button
+            className="button primary"
+            disabled={
+              busy !== null || !trimmedText
+            }
+            onClick={() => void publish()}
+          >
+            {primaryLabel}
           </button>
-          <button className="button secondary" disabled={busy !== null} onClick={() => setEditing((value) => !value)}>
-            {editing ? "Cancel edit" : "Edit reply"}
-          </button>
-          <button className="button ghost danger-text" disabled={busy !== null} onClick={() => act("ignore")}>
-            {busy === "ignore" ? "Ignoring…" : "Ignore"}
+
+          {editing ? (
+            <button
+              className="button secondary"
+              disabled={busy !== null}
+              onClick={cancelEdit}
+            >
+              Cancel edit
+            </button>
+          ) : (
+            <button
+              className="button secondary"
+              disabled={busy !== null}
+              onClick={() => {
+                setEditing(true);
+                setError(null);
+              }}
+            >
+              {isFailed
+                ? "Edit & retry"
+                : "Edit reply"}
+            </button>
+          )}
+
+          <button
+            className="button ghost danger-text"
+            disabled={busy !== null}
+            onClick={() => void ignore()}
+          >
+            {busy === "ignore"
+              ? "Ignoring…"
+              : "Ignore"}
           </button>
         </div>
       ) : (
-        <div className="reply-footnote">{reply.youtube_reply_id ? "Published to YouTube" : titleCase(reply.status)}</div>
+        <div className="reply-footnote">
+          {isPublished
+            ? reply.youtube_reply_id
+              ? "Published to YouTube ✓"
+              : "Published ✓"
+            : titleCase(reply.status)}
+        </div>
       )}
     </article>
   );

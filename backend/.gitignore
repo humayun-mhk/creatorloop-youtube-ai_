@@ -1,0 +1,15 @@
+# Environment files
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# Keep example env files
+!.env.example
+!.env.workflow.example
+
+# Dependencies / builds
+node_modules/
+.next/
+__pycache__/
+*.pyc

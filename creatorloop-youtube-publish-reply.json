@@ -1,0 +1,212 @@
+{
+  "name": "CreatorLoop - Publish Approved YouTube Reply v3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-reply",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a0a4995a-2366-4be4-af7c-d24d4a4d20e0",
+      "name": "FastAPI - Publish Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      },
+      "webhookId": "creatorloop-youtube-reply"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst youtubeCommentId = String(body.youtube_comment_id ?? '').trim();\nconst reply = String(body.reply ?? '').trim();\nif (!youtubeCommentId) throw new Error('youtube_comment_id is required');\nif (!reply) throw new Error('reply is required');\nif (reply.length > 2000) throw new Error('reply is too long');\nreturn [{ json: {\n  youtube_comment_id: youtubeCommentId,\n  reply,\n  idempotency_key: $json.headers?.['idempotency-key'] ?? youtubeCommentId\n} }];"
+      },
+      "id": "1b729b47-bb9c-4132-94ad-552efbe60bd4",
+      "name": "Validate Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "mine",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "3edf16b2-e70f-4387-a232-21f3f9880f59",
+      "name": "YouTube - Publishing Account",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        192
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const publisher = $json.items?.[0];\nif (!publisher?.id) throw new Error('The connected Google account does not have an authenticated YouTube channel');\nconst req = $('Validate Reply').first().json;\nreturn [{ json: {\n  ...req,\n  publisher_channel_id: publisher.id,\n  publisher_channel_title: publisher.snippet?.title ?? 'YouTube channel'\n} }];"
+      },
+      "id": "f3ad17d9-8aec-464a-9902-99def8331b70",
+      "name": "Validate Publishing Account",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/youtube/v3/comments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ snippet: { parentId: $('Validate Publishing Account').first().json.youtube_comment_id, textOriginal: $('Validate Publishing Account').first().json.reply } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "bcec2b08-2cbf-4cca-8c6b-33cdb0f0e75f",
+      "name": "YouTube - Publish Comment Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        192
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "N8J7AdfIC0ZRramJ",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { youtube_reply_id: $json.id, status: 'published', publisher_channel_id: $('Validate Publishing Account').first().json.publisher_channel_id, publisher_channel_title: $('Validate Publishing Account').first().json.publisher_channel_title } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "e783636a-d33c-4d4c-91eb-580b6e5dee38",
+      "name": "Return Published Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1184,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "FastAPI - Publish Reply Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reply": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Publishing Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Publishing Account": {
+      "main": [
+        [
+          {
+            "node": "Validate Publishing Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Publishing Account": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Publish Comment Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Publish Comment Reply": {
+      "main": [
+        [
+          {
+            "node": "Return Published Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

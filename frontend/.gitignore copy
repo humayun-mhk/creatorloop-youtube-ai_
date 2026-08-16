@@ -1,0 +1,7 @@
+
+# Environment secrets
+.env
+.env.*
+backend/.env
+!.env.example
+!.env.workflow.example

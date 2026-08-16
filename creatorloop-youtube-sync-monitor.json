@@ -1,0 +1,1450 @@
+{
+  "name": "CreatorLoop - YouTube Sync & Comment Monitor v3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "creatorloop-channel-sync",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "240f4fb7-f708-4324-8211-ad6149aa4057",
+      "name": "FastAPI - Channel Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        256
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      },
+      "webhookId": "creatorloop-channel-sync"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst allowed = ['connect', 'sync'];\nif (!allowed.includes(body.action)) throw new Error('action must be connect or sync');\nif (!body.callback_base_url) throw new Error('callback_base_url is required');\n\nconst callback = String(body.callback_base_url).replace(/\\/$/, '');\nif (body.action === 'connect' && !body.target_channel) throw new Error('target_channel is required for connect');\nif (body.action === 'sync') {\n  if (!body.channel_id) throw new Error('channel_id is required for sync');\n  if (!body.youtube_channel_id) throw new Error('youtube_channel_id is required for sync');\n}\n\n// Used only by the schedule trigger to know which CreatorLoop backend to call.\nconst state = $getWorkflowStaticData('global');\nstate.callback_base_url = callback;\nif (body.channel_id) state.channel_id = Number(body.channel_id);\nif (body.youtube_channel_id) state.youtube_channel_id = String(body.youtube_channel_id);\n\nreturn [{ json: { ...body, callback_base_url: callback } }];"
+      },
+      "id": "8183a5ac-480e-4a89-a1b5-a8cfd9893251",
+      "name": "Validate FastAPI Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "connect",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "baff7828-397e-44c1-873a-da64589cccfa"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "connect"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "sync",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "7b455d11-b49b-4145-baf7-b2e382d843a7"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "sync"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5f8c2c33-aad1-4678-9e54-bb31e579aac4",
+      "name": "Route FastAPI Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        320,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = String($json.target_channel || '').trim();\nif (!raw) throw new Error('target_channel is empty');\nlet value = raw;\ntry {\n  const u = new URL(raw);\n  if (!u.hostname.toLowerCase().includes('youtube.com')) throw new Error('Only YouTube channel URLs are supported');\n  const parts = u.pathname.split('/').filter(Boolean);\n  if (parts[0] === 'channel' && parts[1]) value = parts[1];\n  else if (parts[0]?.startsWith('@')) value = parts[0];\n  else value = parts[0] || raw;\n} catch (e) {\n  if (/^https?:\\/\\//i.test(raw)) throw e;\n}\nvalue = String(value).trim();\nlet lookup_type = 'search';\nlet lookup_value = value;\nif (/^UC[0-9A-Za-z_-]{20,}$/.test(value)) lookup_type = 'id';\nelse if (value.startsWith('@')) { lookup_type = 'handle'; lookup_value = value; }\nelse if (/^[A-Za-z0-9._-]+$/.test(value)) { lookup_type = 'handle'; lookup_value = '@' + value.replace(/^@/, ''); }\nreturn [{ json: { ...$json, lookup_type, lookup_value } }];"
+      },
+      "id": "4c7984ac-dbd3-4d4c-9d29-f5b13704777d",
+      "name": "Normalize Channel Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "id",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8eac6a9c-a6e8-44ad-8b34-8abe8e2dc01a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "id"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "handle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "edd6960f-f19b-4dcf-9793-866b84d1f582"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "handle"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lookup_type }}",
+                    "rightValue": "search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "01356dba-32e0-48a4-a077-a1c985151e65"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52937cc8-2d0e-4b66-b4a4-6c64b1e24192",
+      "name": "Route Channel Lookup",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        800,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.lookup_value }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f2505021-d863-4819-9947-9182977ba265",
+      "name": "YouTube - Channel By ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        -96
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "forHandle",
+              "value": "={{ $json.lookup_value }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1138002e-3e18-4273-897a-e5116a05e05f",
+      "name": "YouTube - Channel By Handle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "type",
+              "value": "channel"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.lookup_value.replace(/^@/, '') }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "3a7d0aca-4b2e-4df4-a664-3fe3bb83a0c0",
+      "name": "YouTube - Search Channel Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.items?.[0]?.id?.channelId }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ff632a4d-4f7d-48dd-a8f9-2a476d9e6321",
+      "name": "YouTube - Resolve Search Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1312,
+        224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json.items?.[0];\nif (!item?.id) throw new Error('Public YouTube channel not found');\nconst s = item.snippet ?? {};\nconst c = item.contentDetails ?? {};\nconst st = item.statistics ?? {};\nconst brand = item.brandingSettings?.channel ?? {};\nconst status = item.status ?? {};\nconst topics = item.topicDetails ?? {};\nconst thumbnail = s.thumbnails?.high?.url ?? s.thumbnails?.medium?.url ?? s.thumbnails?.default?.url ?? null;\nreturn [{ json: {\n  youtube_channel_id: item.id,\n  channel_title: s.title || 'YouTube Channel',\n  channel_url: `https://www.youtube.com/channel/${item.id}`,\n  custom_url: s.customUrl ?? null,\n  thumbnail_url: thumbnail,\n  description: s.description ?? '',\n  country: s.country ?? brand.country ?? null,\n  default_language: s.defaultLanguage ?? brand.defaultLanguage ?? null,\n  published_at: s.publishedAt ?? null,\n  uploads_playlist_id: c.relatedPlaylists?.uploads ?? null,\n  subscriber_count: Number(st.subscriberCount ?? 0),\n  hidden_subscriber_count: Boolean(st.hiddenSubscriberCount ?? false),\n  channel_view_count: Number(st.viewCount ?? 0),\n  public_video_count: Number(st.videoCount ?? 0),\n  keywords: brand.keywords ?? null,\n  topic_categories: topics.topicCategories ?? [],\n  privacy_status: status.privacyStatus ?? null,\n  made_for_kids: status.madeForKids ?? null\n} }];"
+      },
+      "id": "e43a8091-f76d-472e-b529-515a6d19ce25",
+      "name": "Build Full Public Channel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { channel: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "85276b1d-f47b-4527-87ef-340bef0a5ce7",
+      "name": "Return Channel To FastAPI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1824,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'syncing', channel_id: $json.channel_id, youtube_channel_id: $json.youtube_channel_id } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "dced230b-e508-4a68-9d6b-21c1098205d7",
+      "name": "Accept Full Sync",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        576,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics,brandingSettings,status,topicDetails"
+            },
+            {
+              "name": "id",
+              "value": "={{ $('Validate FastAPI Request').first().json.youtube_channel_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "34f89770-19a3-4dd3-919b-f82da608a1f2",
+      "name": "YouTube - Sync Channel Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        448
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Validate FastAPI Request').first().json;\nconst item = $json.items?.[0];\nif (!item?.id) throw new Error('YouTube channel no longer exists or is not public');\nconst uploads = item.contentDetails?.relatedPlaylists?.uploads;\nif (!uploads) throw new Error('Channel uploads playlist was not returned by YouTube');\nconst state = $getWorkflowStaticData('global');\nstate.callback_base_url = req.callback_base_url;\nstate.channel_id = Number(req.channel_id);\nstate.youtube_channel_id = item.id;\nstate.uploads_playlist_id = uploads;\nreturn [{ json: {\n  callback_base_url: req.callback_base_url,\n  channel_id: Number(req.channel_id),\n  youtube_channel_id: item.id,\n  uploads_playlist_id: uploads,\n  video_sync_mode: 'all'\n} }];"
+      },
+      "id": "602812d0-5c29-45f1-a04f-2a09c2e31e3b",
+      "name": "Build Full Sync Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "f8a1c3e9-448e-42e4-b427-5ede3a43e732",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $getWorkflowStaticData('global');\nconst callback = String(state.callback_base_url || '').replace(/\\/$/, '');\nif (!callback) return [];\nreturn [{ json: { callback_base_url: callback } }];"
+      },
+      "id": "953d4bc6-2fd0-4492-a4d8-c8aa6e8dbbce",
+      "name": "Load Monitor Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.callback_base_url + '/api/channels/current' }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "aa0eb440-78a6-4b22-9d15-34ba576a4cf5",
+      "name": "FastAPI - Current Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $getWorkflowStaticData('global');\nconst current = $json.channel;\nif (!$json.connected || !current?.id || !current?.youtube_channel_id) return [];\nconst uploads = current.uploads_playlist_id || state.uploads_playlist_id;\nif (!uploads) throw new Error('uploads_playlist_id is missing. Reconnect this channel once with the updated workflow.');\nreturn [{ json: {\n  callback_base_url: String(state.callback_base_url).replace(/\\/$/, ''),\n  channel_id: Number(current.id),\n  youtube_channel_id: current.youtube_channel_id,\n  uploads_playlist_id: uploads,\n  video_sync_mode: 'recent'\n} }];"
+      },
+      "id": "de496ad5-1696-45a3-b3c9-80d385522bd1",
+      "name": "Build Monitor Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.video_sync_mode }}",
+                    "rightValue": "all",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8224cead-3f1b-49c4-ae79-1ca7b29a2524"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "all"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.video_sync_mode }}",
+                    "rightValue": "recent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "80573b9d-7f9a-4ede-a130-d19411a2da55"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "recent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f9246fbf-231f-4d76-90b8-7cfb1add82da",
+      "name": "Route Video Sync Mode",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1344,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/playlistItems",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "contentDetails"
+            },
+            {
+              "name": "playlistId",
+              "value": "={{ $json.uploads_playlist_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "name": "pageToken",
+                    "value": "={{ $response.body.nextPageToken }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.nextPageToken }}",
+              "requestInterval": 0
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "cfd13411-19c1-4435-959a-e90a3cf71274",
+      "name": "YouTube - All Uploads (Paginated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        496
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/playlistItems",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "contentDetails"
+            },
+            {
+              "name": "playlistId",
+              "value": "={{ $json.uploads_playlist_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "0f9570ad-b14b-4f67-af8f-810893ca5a91",
+      "name": "YouTube - Recent Uploads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        704
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\nconst ctx = getContext();\nconst ids = [];\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  for (const row of body.items ?? []) {\n    const id = row.contentDetails?.videoId;\n    if (id && !ids.includes(id)) ids.push(id);\n  }\n}\nif (!ids.length) return [{ json: { ...ctx, __no_videos: true } }];\nconst output = [];\nfor (let i = 0; i < ids.length; i += 50) {\n  output.push({ json: { ...ctx, __no_videos: false, video_ids: ids.slice(i, i + 50) } });\n}\nreturn output;"
+      },
+      "id": "84aac970-71a8-454d-a608-6ba03d30b293",
+      "name": "Batch Video IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1856,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.__no_videos !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "20ef2f6f-c0fb-42b2-8862-51383ad80ff6",
+      "name": "Has Video Batch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics"
+            },
+            {
+              "name": "id",
+              "value": "={{ $json.video_ids.join(',') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b135f728-1de6-42fc-849d-8e10476f8dc3",
+      "name": "YouTube - Video Metadata",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        512
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\nconst ctx = getContext();\nconst videos = [];\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  for (const v of body.items ?? []) {\n    videos.push({\n      found: true,\n      video_id: v.id,\n      title: v.snippet?.title || 'Untitled',\n      youtube_url: `https://www.youtube.com/watch?v=${v.id}`,\n      thumbnail_url: v.snippet?.thumbnails?.high?.url ?? v.snippet?.thumbnails?.medium?.url ?? v.snippet?.thumbnails?.default?.url ?? null,\n      description: v.snippet?.description ?? '',\n      tags: v.snippet?.tags ?? [],\n      channel_id: v.snippet?.channelId,\n      channel_title: v.snippet?.channelTitle ?? 'Unknown',\n      category_id: v.snippet?.categoryId ?? null,\n      default_language: v.snippet?.defaultLanguage ?? null,\n      default_audio_language: v.snippet?.defaultAudioLanguage ?? null,\n      live_broadcast_content: v.snippet?.liveBroadcastContent ?? null,\n      published_at: v.snippet?.publishedAt ?? null,\n      duration: v.contentDetails?.duration ?? null,\n      definition: v.contentDetails?.definition ?? null,\n      caption_available: v.contentDetails?.caption === 'true',\n      view_count: Number(v.statistics?.viewCount ?? 0),\n      like_count: Number(v.statistics?.likeCount ?? 0),\n      comment_count: Number(v.statistics?.commentCount ?? 0)\n    });\n  }\n}\nconst output = [];\nfor (let i = 0; i < videos.length; i += 50) {\n  output.push({ json: { ...ctx, videos: videos.slice(i, i + 50) } });\n}\nreturn output.length ? output : [{ json: { ...ctx, __no_videos: true } }];"
+      },
+      "id": "7390e4fb-b459-4e10-a72f-3a754191c750",
+      "name": "Normalize Video Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_base_url + '/api/channels/' + $json.channel_id + '/internal/videos' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ videos: $json.videos, index_videos: true }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "902fb608-f319-4263-9492-6e8d7d64c72a",
+      "name": "FastAPI - Store & Index Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2816,
+        512
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getContext() {\n  try {\n    const m = $('Build Monitor Context').first().json;\n    if (m?.video_sync_mode === 'recent') return m;\n  } catch {}\n  return $('Build Full Sync Context').first().json;\n}\nreturn [{ json: getContext() }];"
+      },
+      "id": "06b1a9a8-ef1a-4295-91ff-182800c402ee",
+      "name": "Prepare Comment Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_base_url + '/api/channels/' + $json.channel_id + '/internal/progress' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ status: 'fetching_comments', comment_sync_status: 'syncing' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "571c5fb2-afd1-44a9-a2e0-7af0678000e4",
+      "name": "FastAPI - Mark Fetching Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3328,
+        608
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/commentThreads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,replies"
+            },
+            {
+              "name": "allThreadsRelatedToChannelId",
+              "value": "={{ $('Prepare Comment Poll').first().json.youtube_channel_id }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "100"
+            },
+            {
+              "name": "order",
+              "value": "time"
+            },
+            {
+              "name": "textFormat",
+              "value": "plainText"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "name": "pageToken",
+                    "value": "={{ $response.body.nextPageToken }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.nextPageToken }}",
+              "limitPagesFetched": true,
+              "maxRequests": 3,
+              "requestInterval": 0
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "abf5070f-0eb9-47df-86c7-3fb85d9514c6",
+      "name": "YouTube - New Channel Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3584,
+        608
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gpZeh99h9QdKazzr",
+          "name": "N8N_QUICK_ANALYZE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Comment Poll').first().json;\nconst output = [];\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  for (const thread of body.items ?? []) {\n    const top = thread.snippet?.topLevelComment;\n    const s = top?.snippet;\n    if (!top?.id || !s?.videoId || !s?.textOriginal && !s?.textDisplay) continue;\n    output.push({ json: {\n      event_type: 'youtube.comment.received',\n      source: 'youtube',\n      monitored_channel_id: ctx.youtube_channel_id,\n      comment: {\n        youtube_comment_id: top.id,\n        youtube_thread_id: thread.id,\n        video_id: s.videoId,\n        author_name: s.authorDisplayName || 'YouTube viewer',\n        author_channel_id: s.authorChannelId?.value ?? null,\n        author_profile_image_url: s.authorProfileImageUrl ?? null,\n        author_channel_url: s.authorChannelUrl ?? null,\n        text: s.textOriginal ?? s.textDisplay ?? '',\n        like_count: Number(s.likeCount ?? 0),\n        reply_count: Number(thread.snippet?.totalReplyCount ?? 0),\n        can_reply: thread.snippet?.canReply !== false,\n        is_public: thread.snippet?.isPublic !== false,\n        published_at: s.publishedAt,\n        updated_at: s.updatedAt ?? s.publishedAt\n      },\n      video: { found: false, video_id: s.videoId },\n      ingestion: {\n        fetched_at: new Date().toISOString(),\n        pipeline: 'creatorloop-n8n-youtube-monitor-v3'\n      }\n    } });\n  }\n}\nif (!output.length) return [{ json: { ...ctx, __no_comments: true } }];\nreturn output;"
+      },
+      "id": "708eaed6-d44b-4514-8e83-027862e383b4",
+      "name": "Normalize New Comments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.__no_comments !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b6fc8fc7-be7c-4ca2-9bfd-f0b3e324a79c",
+      "name": "Has New/Public Comment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4096,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Comment Poll').first().json.callback_base_url + '/api/youtube/comments/ingest' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "92e13bb0-b9a0-433c-a719-167ed6f89b94",
+      "name": "FastAPI - Ingest + Gemini Analyze",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4352,
+        512
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g3IzPKGjdy1rEuY9",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Prepare Comment Poll').first().json;\nlet delivered = 0;\nlet suggested = 0;\nlet unmet = 0;\nfor (const input of items) {\n  const body = input.json.body ?? input.json;\n  if (body.__no_comments) continue;\n  delivered += 1;\n  if (body.outcome === 'reply_suggested') suggested += 1;\n  if (body.outcome === 'unmet_demand') unmet += 1;\n}\nreturn [{ json: { ...ctx, comments_delivered: delivered, replies_suggested: suggested, unmet_demand: unmet } }];"
+      },
+      "id": "80355990-f839-4765-9062-38b0bbcfd518",
+      "name": "Finalize Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4608,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback_base_url + '/api/channels/' + $json.channel_id + '/internal/progress' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ status: 'ready', video_sync_status: 'ready', comment_sync_status: 'ready', index_status: 'ready' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "43178dcf-42b9-4203-ab2f-9327d5675f32",
+      "name": "FastAPI - Mark Channel Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4864,
+        608
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AwzIikbjqIFEbGZZ",
+          "name": "CreatorLoop Channel Sync Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "FastAPI - Channel Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate FastAPI Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate FastAPI Request": {
+      "main": [
+        [
+          {
+            "node": "Route FastAPI Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route FastAPI Action": {
+      "main": [
+        [
+          {
+            "node": "Normalize Channel Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Accept Full Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Channel Input": {
+      "main": [
+        [
+          {
+            "node": "Route Channel Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Channel Lookup": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Channel By ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Channel By Handle",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Search Channel Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Channel By ID": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Channel By Handle": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Search Channel Fallback": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Resolve Search Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Resolve Search Result": {
+      "main": [
+        [
+          {
+            "node": "Build Full Public Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Full Public Channel": {
+      "main": [
+        [
+          {
+            "node": "Return Channel To FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept Full Sync": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Sync Channel Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Sync Channel Details": {
+      "main": [
+        [
+          {
+            "node": "Build Full Sync Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Full Sync Context": {
+      "main": [
+        [
+          {
+            "node": "Route Video Sync Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Monitor Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Monitor Context": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Current Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Current Channel": {
+      "main": [
+        [
+          {
+            "node": "Build Monitor Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Monitor Context": {
+      "main": [
+        [
+          {
+            "node": "Route Video Sync Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Video Sync Mode": {
+      "main": [
+        [
+          {
+            "node": "YouTube - All Uploads (Paginated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "YouTube - Recent Uploads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - All Uploads (Paginated)": {
+      "main": [
+        [
+          {
+            "node": "Batch Video IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Recent Uploads": {
+      "main": [
+        [
+          {
+            "node": "Batch Video IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Video IDs": {
+      "main": [
+        [
+          {
+            "node": "Has Video Batch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Video Batch?": {
+      "main": [
+        [
+          {
+            "node": "YouTube - Video Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Comment Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - Video Metadata": {
+      "main": [
+        [
+          {
+            "node": "Normalize Video Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Video Batches": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Store & Index Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Store & Index Videos": {
+      "main": [
+        [
+          {
+            "node": "Prepare Comment Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Comment Poll": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Mark Fetching Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Mark Fetching Comments": {
+      "main": [
+        [
+          {
+            "node": "YouTube - New Channel Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube - New Channel Comments": {
+      "main": [
+        [
+          {
+            "node": "Normalize New Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize New Comments": {
+      "main": [
+        [
+          {
+            "node": "Has New/Public Comment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New/Public Comment?": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Ingest + Gemini Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI - Ingest + Gemini Analyze": {
+      "main": [
+        [
+          {
+            "node": "Finalize Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Poll": {
+      "main": [
+        [
+          {
+            "node": "FastAPI - Mark Channel Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
